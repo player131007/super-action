@@ -1,0 +1,39 @@
+name: Make super.img from a GSI
+
+on:
+  workflow_dispatch:
+    inputs:
+      SUPER_URL:
+        description: "Link to super.img"
+        type: string
+        required: true
+      GSI_URL:
+        description: "Link to the GSI image (system.img)"
+        type: string
+        required: true
+
+jobs:
+  make-super:
+    runs-on: ubuntu-22.04
+    defaults:
+      run:
+        shell: bash
+    steps:
+      # - name: clean up action environment
+      #   uses: rokibhasansagar/slimhub_actions@v23.44.6
+      - name: install nix
+        uses: DeterminateSystems/nix-installer-action@v10
+      - name: install stuffs
+        run: |
+          nix profile install nixpkgs#android-tools nixpkgs#aria2
+      - name: download files
+        env:
+          SUPER_URL: ${{ inputs.SUPER_URL }}
+          GSI_URL: ${{ inputs.GSI_URL }}
+        run: |
+          aria2c --summary-interval=0 --show-console-readout false -x 4 -i - << EOF
+          $SUPER_URL
+            out=super.img
+          $GSI_URL
+            out=system.img
+          EOF
