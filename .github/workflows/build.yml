@@ -19,8 +19,8 @@ jobs:
       run:
         shell: bash
     steps:
-      # - name: clean up action environment
-      #   uses: rokibhasansagar/slimhub_actions@v23.44.6
+      - name: clean up action environment
+        uses: rokibhasansagar/slimhub_actions@v23.44.6
       - name: install nix
         uses: DeterminateSystems/nix-installer-action@v10
       - name: install stuffs
@@ -34,6 +34,61 @@ jobs:
           aria2c --summary-interval=0 --show-console-readout false -x 4 -i - << EOF
           $SUPER_URL
             out=super.img
+
           $GSI_URL
             out=system.img
           EOF
+      - name: patch system.img and friends
+        run: |
+          simg2img super.img super_raw.img
+          rm super.img
+          lpunpack super_raw.img image_build/
+          rm super_raw.img
+          mv system.img image_build/
+
+          fallocate -l 1M empty_ext4.img
+          mkfs.ext4 -O ^has_journal empty_ext4.img
+
+          if [ -e ./image_build/product.img ]; then
+            cp empty_ext4.img ./image_build/product.img
+            e2label ./image_build/product.img product
+          fi
+
+          if [ -e ./image_build/system_ext.img ]; then
+            cp empty_ext4.img ./image_build/system_ext.img
+            e2label ./image_build/system_ext.img system_ext
+          fi
+      - name: repack super.img
+        run: |
+          sizeof() {
+            echo $(du -sb "$1" | cut -f1)
+          }
+
+          shopt -s nullglob
+          cd image_build
+
+          declare -a ARGS
+          for img in *.img; do
+            part=${img:0:-4}
+            ARGS+=("--partition=$part:readonly:$(sizeof "$img")" "--image=$part=$img")
+          done
+
+          FREE_SIZE=1073741824 # 1GiB
+          lpmake --device super:$(($FREE_SIZE + $(sizeof .) + 65536*2)) \
+                 --metadata-size 65536 \
+                 --metadata-slots 2 \
+                 --sparse \
+                 -o ../super.img \
+                 "${ARGS[@]}"
+          cd ..
+          rm -rf image_build
+      - name: compress super.img
+        run: |
+          zstd --rm -19 super.img
+      - name: upload super.img
+        uses: actions/upload-artifact@v4
+        with:
+          name: super.img.zst
+          path: super.img.zst
+          if-no-files-found: error
+          compression-level: 0
