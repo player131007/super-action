@@ -31,7 +31,7 @@ jobs:
           SUPER_URL: ${{ inputs.SUPER_URL }}
           GSI_URL: ${{ inputs.GSI_URL }}
         run: |
-          aria2c --summary-interval=0 --show-console-readout false -x 4 -i - << EOF
+          aria2c --summary-interval=120 --show-console-readout false -x 4 -i - << EOF
           $SUPER_URL
             out=super.img
 
